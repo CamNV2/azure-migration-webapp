@@ -5,6 +5,7 @@ from flask import render_template, session, request, redirect, url_for, flash, m
 from azure.servicebus import Message
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+from azure.servicebus import ServiceBusClient, ServiceBusMessage
 import logging
 
 @app.route('/')
@@ -81,7 +82,16 @@ def notification():
             notification.status = 'Notified {} attendees'.format(len(attendees))
             db.session.commit()
             # TODO Call servicebus queue_client to enqueue notification ID
+            notification_id = notification.id
 
+            connstr = app.config.get("SERVICE_BUS_CONNECTION_STRING")
+            queue_name = app.config.get("SERVICE_BUS_QUEUE_NAME")
+
+            with ServiceBusClient.from_connection_string(connstr, logging_enable=True) as client:
+                with client.get_queue_sender(queue_name) as sender:
+                    message = ServiceBusMessage(str(notification_id))
+                    sender.send_messages(message)
+                    logging.error(f"Notification ID {str(notification_id)}: Message '{message}' sent to queue '{queue_name}'")
             #################################################
             ## END of TODO
             #################################################
